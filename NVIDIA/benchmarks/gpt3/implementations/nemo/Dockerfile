@@ -43,8 +43,8 @@ RUN if [ "${APEX_REVISION}" != SKIP ]; then \
       MAX_JOBS=${APEX_MAX_JOBS} NVCC_APPEND_FLAGS="--threads 8" pip install -v --no-build-isolation --no-cache-dir --disable-pip-version-check --config-settings "--build-option=--cpp_ext --cuda_ext --bnp --xentropy --deprecated_fused_adam --deprecated_fused_lamb --fast_multihead_attn --distributed_lamb --fast_layer_norm --transducer --distributed_adam --fmha --fast_bottleneck --nccl_p2p --peer_memory --permutation_search --focal_loss --fused_conv_bias_relu --index_mul_2d --cudnn_gbn --group_norm" . \
     ; fi
 
-## 2. Transformer Engine
-ARG TE_REVISION=v1.6rc1
+## 2. Transformer Engine +fix for arm64
+ARG TE_REVISION=3b4d9e8766b829d50ac78bb26f770fb8d9825ae7 # v1.6rc1
 ENV CUSTOM_TE_REVISION ${TE_REVISION}
 
 RUN if [ "${TE_REVISION}" != SKIP ]; then \
