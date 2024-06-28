@@ -19,7 +19,8 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:24.04-py3
+#ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:24.04-py3
+ARG FROM_IMAGE_NAME=mlperf-megatron:24.04
 FROM ${FROM_IMAGE_NAME}
 
 # Document build setup
@@ -52,7 +53,7 @@ RUN if [ "${TE_REVISION}" != SKIP ]; then \
     ; fi
 
 ## 3. NeMo
-ARG NEMO_REVISION=v2.0.0.rc0.beta
+ARG NEMO_REVISION=v2.0.0rc0
 ENV CUSTOM_NEMO_REVISION ${NEMO_REVISION}
 ARG NEMO_BASE_VERSION=r2.0.0
 ENV CUSTOM_NEMO_BASE_VERSION ${NEMO_BASE_VERSION}
@@ -74,7 +75,7 @@ RUN if [ "${NEMO_REVISION}" == SKIP ]; then \
       git checkout ${NEMO_REVISION} && \
       echo NEMO_COMMIT_HASH=$(git rev-parse HEAD) && \
       pip uninstall -y nemo-toolkit && \
-      pip install "cython<3.0.0" && \
+      pip install pkgconfig py-cpuinfo "cython<3.0.0" && \
       pip install --no-build-isolation -e ".[nlp]" \
     ; fi
 
@@ -106,19 +107,19 @@ ENV PYTHONPATH "${PYTHONPATH}:/workspace/Megatron-LM"
 # RUN pip install --force-reinstall --no-deps pytorch-lightning==2.0.7
 
 ## 5. Benchmark dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+#COPY requirements.txt .
+#RUN pip install --no-cache-dir -r requirements.txt
 
 ## 6. Use nccl-rdma-sharp-plugins from master to pick a fix after HPCX2.18 release
-RUN rm -rf /opt/hpcx/nccl_rdma_sharp_plugin && \
-    ln -s /usr/lib/x86_64-linux-gnu/libibverbs.so.1 /usr/lib/x86_64-linux-gnu/libibverbs.so && \
-    git clone https://github.com/Mellanox/nccl-rdma-sharp-plugins && \
-    cd nccl-rdma-sharp-plugins/ && \
-    ./autogen.sh && \
-    ./configure --prefix=/opt/hpcx/nccl_rdma_sharp_plugin --with-cuda=/usr/local/cuda --with-sharp=/opt/hpcx/sharp/ && \
-    make -j install && \
-    cd ../ && \
-    rm -rf nccl-rdma-sharp-plugins/
+#RUN rm -rf /opt/hpcx/nccl_rdma_sharp_plugin && \
+#    ln -s /usr/lib/x86_64-linux-gnu/libibverbs.so.1 /usr/lib/x86_64-linux-gnu/libibverbs.so && \
+#    git clone https://github.com/Mellanox/nccl-rdma-sharp-plugins && \
+#    cd nccl-rdma-sharp-plugins/ && \
+#    ./autogen.sh && \
+#    ./configure --prefix=/opt/hpcx/nccl_rdma_sharp_plugin --with-cuda=/usr/local/cuda --with-sharp=/opt/hpcx/sharp/ && \
+#    make -j install && \
+#    cd ../ && \
+#    rm -rf nccl-rdma-sharp-plugins/
 
 # Benchmark code
 WORKDIR /workspace/llm
