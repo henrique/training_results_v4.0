@@ -18,10 +18,22 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-
-#ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:24.04-py3
-ARG FROM_IMAGE_NAME=mlperf-megatron:24.04
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:24.04-py3
 FROM ${FROM_IMAGE_NAME}
+
+RUN apt-get update \
+  && apt-get install -yqq --no-install-recommends openssh-server \
+  && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /run/sshd
+
+#git+https://github.com/mlcommons/logging.git@4.0.0-rc2
+#git+https://github.com/NVIDIA/mlperf-common.git@68cf1d0d5e3de3351e66abb696d0e2d011aabf47
+RUN pip install -vvv \
+  git+https://github.com/mlcommons/logging.git@4.0.0-rc2 \
+  git+https://github.com/NVIDIA/mlperf-common.git@68cf1d0d5e3de3351e66abb696d0e2d011aabf47 \
+  zarr
+RUN pip install -vvv tensorstore==0.1.45
+RUN pip install -vvv causal-conv1d==1.2.0.post2
 
 # Document build setup
 ARG FROM_IMAGE_NAME
@@ -53,7 +65,7 @@ RUN if [ "${TE_REVISION}" != SKIP ]; then \
     ; fi
 
 ## 3. NeMo
-ARG NEMO_REVISION=v2.0.0rc0
+ARG NEMO_REVISION=v2.0.0rc0    # v2.0.0.rc0.beta
 ENV CUSTOM_NEMO_REVISION ${NEMO_REVISION}
 ARG NEMO_BASE_VERSION=r2.0.0
 ENV CUSTOM_NEMO_BASE_VERSION ${NEMO_BASE_VERSION}
@@ -127,3 +139,4 @@ WORKDIR /workspace/llm
 COPY . .
 ENV PYTHONPATH "/workspace/llm:/workspace/NeMo:${PYTHONPATH}"
 
+RUN pip install opencc-python-reimplemented==0.1.7
