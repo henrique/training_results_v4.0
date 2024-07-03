@@ -1,6 +1,6 @@
 ## System run parms
 
-export CUDA_VISIBLE_DEVICES=0,4,2,6,1,5,3,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 export TRAIN_ONLY=0
 
