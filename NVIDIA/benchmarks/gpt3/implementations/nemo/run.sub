@@ -44,16 +44,15 @@ export MLPERF_STATUS='research'
 export REMOUNT_WORKDIR=1
 export MPLCONFIGDIR="$SCRATCH/.cache"
 export HF_HOME="$SCRATCH/huggingface"
-export REMOUNT_NEMO_PATH=/capstor/scratch/cscs/dealmeih/dev/NeMo
+# export REMOUNT_NEMO_PATH=/capstor/scratch/cscs/dealmeih/dev/NeMo
 export DEBUG=1
 export HYDRA_FULL_ERROR=1
-
 
 # Vars with defaults
 export MINIBS="${MINIBS:=128}"
 : "${TENSOR_MODEL_PARALLEL:=1}"
 : "${PIPELINE_MODEL_PARALLEL:=1}"
-: "${LOAD_CHECKPOINTS_PATH:=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm/ckpt4000_nemo_bf16}"
+: "${LOAD_CHECKPOINTS_PATH:=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm}"
 : "${MLPERF_RULESET:=2.1.0}"
 : "${MLPERF_SYSTEM_NAME:='unknown'}"
 : "${CHECK_COMPLIANCE:=1}"

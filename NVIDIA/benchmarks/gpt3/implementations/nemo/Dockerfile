@@ -26,14 +26,14 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /run/sshd
 
-#git+https://github.com/mlcommons/logging.git@4.0.0-rc2
-#git+https://github.com/NVIDIA/mlperf-common.git@68cf1d0d5e3de3351e66abb696d0e2d011aabf47
 RUN pip install -vvv \
   git+https://github.com/mlcommons/logging.git@4.0.0-rc2 \
   git+https://github.com/NVIDIA/mlperf-common.git@68cf1d0d5e3de3351e66abb696d0e2d011aabf47 \
   zarr
+
+# NeMo dependencies
 RUN pip install -vvv tensorstore==0.1.45
-RUN pip install -vvv causal-conv1d==1.2.0.post2
+RUN pip install -vvv causal-conv1d==1.2.0.post2 opencc-python-reimplemented==0.1.7
 
 # Document build setup
 ARG FROM_IMAGE_NAME
@@ -64,8 +64,8 @@ RUN if [ "${TE_REVISION}" != SKIP ]; then \
       NVTE_WITH_USERBUFFERS=1 MPI_HOME=/usr/local/mpi pip install --force-reinstall --no-deps git+https://github.com/NVIDIA/TransformerEngine.git@${TE_REVISION} \
     ; fi
 
-## 3. NeMo
-ARG NEMO_REVISION=v2.0.0rc0    # v2.0.0.rc0.beta
+## 3. NeMo v2.0.0.rc0.beta doesn't install on aarch64, but v2.0.0rc0 does
+ARG NEMO_REVISION=v2.0.0.rc0.beta
 ENV CUSTOM_NEMO_REVISION ${NEMO_REVISION}
 ARG NEMO_BASE_VERSION=r2.0.0
 ENV CUSTOM_NEMO_BASE_VERSION ${NEMO_BASE_VERSION}
@@ -82,13 +82,16 @@ RUN if [ "${NEMO_REVISION}" == SKIP ]; then \
       git clone https://github.com/NVIDIA/NeMo.git && \
       cd NeMo && \
       git config user.email "email@email.com" && \
-      git config user.name "name name" && \  
-      echo NEMO_REVISION=${NEMO_REVISION} && \
-      git checkout ${NEMO_REVISION} && \
+      git config user.name "name name" && \
+      git checkout v2.0.0rc0 && \
       echo NEMO_COMMIT_HASH=$(git rev-parse HEAD) && \
       pip uninstall -y nemo-toolkit && \
       pip install pkgconfig py-cpuinfo "cython<3.0.0" && \
-      pip install --no-build-isolation -e ".[nlp]" \
+      pip install --no-build-isolation -e ".[nlp]" && \
+      echo NEMO_REVISION=${NEMO_REVISION} && \
+      git checkout ${NEMO_REVISION} && \
+      echo NEMO_COMMIT_HASH=$(git rev-parse HEAD) && \
+      pip install --no-build-isolation --no-deps -e ".[nlp]" \
     ; fi
 
 ### Make (has to be called after all changes to repo)
@@ -116,11 +119,11 @@ RUN if [ "${MEGATRON_REVISION}" != SKIP ]; then \
 ENV PYTHONPATH "${PYTHONPATH}:/workspace/Megatron-LM"
 
 # Pin PL version
-# RUN pip install --force-reinstall --no-deps pytorch-lightning==2.0.7
+RUN pip install --force-reinstall --no-deps pytorch-lightning==2.2.4
 
-## 5. Benchmark dependencies
-#COPY requirements.txt .
-#RUN pip install --no-cache-dir -r requirements.txt
+# # 5. Benchmark dependencies
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
 
 ## 6. Use nccl-rdma-sharp-plugins from master to pick a fix after HPCX2.18 release
 #RUN rm -rf /opt/hpcx/nccl_rdma_sharp_plugin && \
@@ -138,5 +141,3 @@ WORKDIR /workspace/llm
 
 COPY . .
 ENV PYTHONPATH "/workspace/llm:/workspace/NeMo:${PYTHONPATH}"
-
-RUN pip install opencc-python-reimplemented==0.1.7

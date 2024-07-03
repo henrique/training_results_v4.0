@@ -15,7 +15,7 @@ export NCCL_MIN_NCHANNELS=4
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-: "${CHECKPOINT_NAME:=""}"
+: "${CHECKPOINT_NAME:="ckpt4000-consumed_samples=0"}"
 export LOAD_CHECKPOINT="/load_checkpoints/"$CHECKPOINT_NAME
 
 export MICRO_BATCH_SIZE=2
@@ -34,14 +34,14 @@ export NCCL_CUMEM_ENABLE=0
 # This is needed to save memory. nvbug 4264087 tracks  fix.
 export NCCL_NVLS_ENABLE=0
 
-# TP overlap: use FP8/MC strided atomic RS and pipelined AG
-export NVTE_UB_SPLIT_RS=0
-export NVTE_UB_ATOMIC_GEMM_RS=1
-export NVTE_RS_STRIDED_ATOMIC=1
-#export NVTE_UB_FP8_RS=1
-unset UB_SKIPMC
-export MC_TP_OVERLAP_AG=True
-export MC_TP_OVERLAP_RS=True
+# # TP overlap: use FP8/MC strided atomic RS and pipelined AG
+# export NVTE_UB_SPLIT_RS=0
+# export NVTE_UB_ATOMIC_GEMM_RS=1
+# export NVTE_RS_STRIDED_ATOMIC=1
+# #export NVTE_UB_FP8_RS=1
+# unset UB_SKIPMC
+# export MC_TP_OVERLAP_AG=True
+# export MC_TP_OVERLAP_RS=True
 
 # FA: Disbale FAv2 from cuDNN and optimizations that consume memory (expected < 200MB) as they cause IMAs
 #export NVTE_FUSED_ATTN=0 # Disable cuDNN fused attention

@@ -1,4 +1,4 @@
-image = "/capstor/scratch/cscs/dealmeih/images/mlperf-training-v4.0-nvidia-gpt3-24.04.sqsh"
+image = "/capstor/scratch/cscs/dealmeih/images/mlperf-training-v4.0-nvidia-gpt3-24.04.pl224.sqsh"
  
 mounts = ["/capstor", "/users"]
  
