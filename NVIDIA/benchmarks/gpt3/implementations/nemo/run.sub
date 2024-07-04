@@ -16,8 +16,9 @@
 
 #SBATCH --exclusive
 #SBATCH --mem=0
-#SBATCH --nodes=12
+#SBATCH --nodes=128
 #SBATCH --job-name=mlperf-nv-gpt3
+#SBATCH --time=12:00:00
 
 source config_common.sh
 source config_fp8.sh
@@ -25,11 +26,12 @@ source config_fp8.sh
 set -eux
 
 export MICRO_BATCH_SIZE=2
-export TP_COMM_OVERLAP=True
 export INTERLEAVED_PIPELINE=4
 export VBOOST_VALUE=0
-export TENSOR_MODEL_PARALLEL=4   #  training.model.tensor_model_parallel_size
-export PIPELINE_MODEL_PARALLEL=12 #  training.model.pipeline_model_parallel_size
+export TENSOR_MODEL_PARALLEL=${TP:=4}   #  training.model.tensor_model_parallel_size
+export PIPELINE_MODEL_PARALLEL=${PP:=8} #  training.model.pipeline_model_parallel_size
+export MINIBS=${BS:=128}
+# export TP_COMM_OVERLAP=True
 
 # Vars without defaults
 export CONT=nemo
@@ -49,7 +51,6 @@ export DEBUG=1
 export HYDRA_FULL_ERROR=1
 
 # Vars with defaults
-export MINIBS="${MINIBS:=128}"
 : "${TENSOR_MODEL_PARALLEL:=1}"
 : "${PIPELINE_MODEL_PARALLEL:=1}"
 : "${LOAD_CHECKPOINTS_PATH:=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm}"
