@@ -1,3 +1,4 @@
-logs*
-results*
+logs*/
+results*/
+errors*/
 __pycache__

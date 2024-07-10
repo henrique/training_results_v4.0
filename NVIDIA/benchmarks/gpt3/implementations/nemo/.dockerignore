@@ -1,7 +1,8 @@
 __pycache__
 .git*
 results/
-logs*
-core*
+logs*/
+errors/
+core_nid*
 slurm-*
 tokenizer.model

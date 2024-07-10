@@ -18,14 +18,22 @@
 #SBATCH --no-requeue
 #SBATCH --nodes=128
 #SBATCH --job-name=mlperf-nv-gpt3
-#SBATCH --time=12:00:00
-#SBATCH --output=logs/slurm-%j.out
+#SBATCH --time=2:00:00
+#SBATCH --output=logs2/slurm-%j.out
 #SBATCH --account=csstaff
+# #SBATCH --reservation=large_jobs_debug
+#SBATCH -x nid006448,nid005986,nid005681,nid006201,nid006401,nid005091
 
 set -eux
 
+JOBREPORT_OUT="logs2/jobrep-$SLURM_JOB_ID"
+
 source config_common.sh
 source config_fp8.sh
+
+# overwrite enroot settings
+export ENROOT_SQUASHFUSE_MOUNT_WAIT=10
+export ENROOT_LIBRARY_PATH=/capstor/scratch/cscs/fmohamed/enroot-lib
 
 export PIPELINE_MODEL_PARALLEL=${PP:=8} #  training.model.pipeline_model_parallel_size
 export TENSOR_MODEL_PARALLEL=${TP:=4}   #  training.model.tensor_model_parallel_size
@@ -34,6 +42,8 @@ export MINIBS=${BS:=128}
 export VBOOST_VALUE=0
 export INTERLEAVED_PIPELINE=4
 # export TP_COMM_OVERLAP=True
+
+env > $TMPDIR/env.log
 
 # Vars without defaults
 export CONT=nemo
@@ -49,9 +59,18 @@ export REMOUNT_WORKDIR=1
 export MPLCONFIGDIR="$SCRATCH/.cache"
 export HF_HOME="$SCRATCH/huggingface"
 # export REMOUNT_NEMO_PATH=/capstor/scratch/cscs/dealmeih/dev/NeMo
+
+export MASTER_PORT=29500
+export DGXNGPU=4
+
 export DEBUG=1
 export HYDRA_FULL_ERROR=1
 export USE_DATETIME=1
+
+
+# Vars with defaults
+# export TENSOR_MODEL_PARALLEL=1
+# export PIPELINE_MODEL_PARALLEL=1
 
 # Vars with defaults
 # : "${TENSOR_MODEL_PARALLEL:=1}"
@@ -81,7 +100,6 @@ export SHARE_RERUNS=${SHARE_RERUNS:=0}
 : "${SYNTH_DATA:=0}"
 : "${EPOCH_PROF:=0}"
 : "${WORK_DIR:=/workspace/llm}"
-: "${DGXNGPU:=4}"
 : "${STORE_CKPTS_IN_LOGDIR:=1}"
 : "${CHECKPOINTS_DIR:=}"
 : "${GLOBAL_TMP_NPY_INDEX_DIR:=$LOGDIR}"
@@ -100,18 +118,7 @@ export SHARE_RERUNS=${SHARE_RERUNS:=0}
 # Sets the value for nvidia-smi boost-slider --vboost
 : "${VBOOST_VALUE:=0}"
 
-# override enroot's (sometimes in-use) randomly chosen ephemeral port.  29500
-# is non-ephemeral and not assigned by the IANA.  If 29500 is in use on your
-# cluster for some other service, then choose a different non-ephemeral
-# unassigned port from
-# https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt
-# or https://svn.nmap.org/nmap/nmap-services.  The range that needs to be
-# avoided is the ephemeral port range, returned by `sysctl
-# net.ipv4.ip_local_port_range` (32768-61000 by default).
-: "${MASTER_PORT:=29500}"
-export MASTER_PORT=$MASTER_PORT
-export DGXNGPU=$DGXNGPU
-# export EXTERNAL_MODEL_CHECKPOINT_DIR=$LOAD_CHECKPOINTS_PATH
+cat $CONT_FILE
 
 # This is used inside a container to create local directory for storing pipes
 export ATTEMPT_CUDA_GDB_CORE_DUMP=${ATTEMPT_CUDA_GDB_CORE_DUMP}
@@ -123,11 +130,11 @@ export ATTEMPT_CUDA_GDB_CORE_DUMP=${ATTEMPT_CUDA_GDB_CORE_DUMP}
 # In certain situations (slurm timeout) cleanup hook is not triggered,
 # that's why we put npy_index in GLOBAL_TMP_NPY_INDEX_DIR by default
 # so they can be easily removed manually.
-: "${NPY_INDEX_DIR:=${GLOBAL_TMP_NPY_INDEX_DIR}/${DATESTAMP}_npy_index}"
-: "${CLEANUP_NPY_INDEX_DIR:=1}"
+export NPY_INDEX_DIR=${GLOBAL_TMP_NPY_INDEX_DIR}/${DATESTAMP}_npy_index
+export CLEANUP_NPY_INDEX_DIR=1
 
 # Add any cluster specific madditional mounts
-: "${EXTRA_MOUNTS:=""}"
+export EXTRA_MOUNTS=""
 
 # RUNSUB_DIR is the directory containing the run.sub script, so we can call
 # other scripts relative to the location of the run.sub script
@@ -257,6 +264,8 @@ cleanup_containers() {
     cleanup_npy_index_dir
 }
 trap cleanup_containers TERM EXIT
+RESUBMIT="env \$(cat $TMPDIR/env.log | xargs) sbatch $0; exit 1"
+trap "set -x; cleanup_containers; $RESUBMIT"  1 7 11 13
 
 # do we need to fetch the data from remote disk into local /tmp disk?
 if [[ "${TARFILE_FOR_PREPROC_DATA:-}" ]]; then
@@ -432,7 +441,7 @@ mllogger.event(key=mllogger.constants.CACHE_CLEAR, value=True)"
          --container-workdir=${WORK_DIR}                 \
          --container-writable                            \
          ${SRUN_EXTRA_ARGS}                              \
-         "slurm2pytorch" ./run_and_time.sh
+         $HOME/bin/jobreport -o $JOBREPORT_OUT -- "slurm2pytorch" ./run_and_time.sh
 
     ) |& tee "${LOG_FILE_BASE}_${_experiment_index}.log"
     # compliance checker
@@ -468,6 +477,7 @@ mllogger.event(key=mllogger.constants.CACHE_CLEAR, value=True)"
     #   srun -N1 -n1 --environment="${CONT_FILE}" --container-mounts="${_cont_mounts}" bash -c "${JET_CREATE} /results/${LOGBASE}_${_experiment_index}.log --asset /results/slurm-${SLURM_JOB_ID}.out --data source_image.name=${CONT} --data slurm.job=${SLURM_JOB_ID} && ${JET_UPLOAD}"
     # fi
 
+    $HOME/bin/jobreport print $JOBREPORT_OUT
 done
 
 if [ -n ${hang_monitor_pid} ] && ps -p $hang_monitor_pid > /dev/null; then
