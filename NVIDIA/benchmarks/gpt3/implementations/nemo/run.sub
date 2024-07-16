@@ -14,26 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#SBATCH --exclusive
 #SBATCH --no-requeue
 #SBATCH --nodes=128
 #SBATCH --job-name=mlperf-nv-gpt3
 #SBATCH --time=2:00:00
-#SBATCH --output=logs2/slurm-%j.out
+#SBATCH --output=logs/slurm-%j.out
 #SBATCH --account=csstaff
-# #SBATCH --reservation=large_jobs_debug
-#SBATCH -x nid006448,nid005986,nid005681,nid006201,nid006401,nid005091
 
 set -eux
 
-JOBREPORT_OUT="logs2/jobrep-$SLURM_JOB_ID"
+JOBREPORT_OUT="logs/jobrep-$SLURM_JOB_ID"
 
 source config_common.sh
 source config_fp8.sh
-
-# overwrite enroot settings
-export ENROOT_SQUASHFUSE_MOUNT_WAIT=10
-export ENROOT_LIBRARY_PATH=/capstor/scratch/cscs/fmohamed/enroot-lib
 
 export PIPELINE_MODEL_PARALLEL=${PP:=8} #  training.model.pipeline_model_parallel_size
 export TENSOR_MODEL_PARALLEL=${TP:=4}   #  training.model.tensor_model_parallel_size
@@ -42,8 +35,6 @@ export MINIBS=${BS:=128}
 export VBOOST_VALUE=0
 export INTERLEAVED_PIPELINE=4
 # export TP_COMM_OVERLAP=True
-
-env > $TMPDIR/env.log
 
 # Vars without defaults
 export CONT=nemo
@@ -58,7 +49,6 @@ export MLPERF_STATUS='research'
 export REMOUNT_WORKDIR=1
 export MPLCONFIGDIR="$SCRATCH/.cache"
 export HF_HOME="$SCRATCH/huggingface"
-# export REMOUNT_NEMO_PATH=/capstor/scratch/cscs/dealmeih/dev/NeMo
 
 export MASTER_PORT=29500
 export DGXNGPU=4
@@ -66,11 +56,6 @@ export DGXNGPU=4
 export DEBUG=1
 export HYDRA_FULL_ERROR=1
 export USE_DATETIME=1
-
-
-# Vars with defaults
-# export TENSOR_MODEL_PARALLEL=1
-# export PIPELINE_MODEL_PARALLEL=1
 
 # Vars with defaults
 # : "${TENSOR_MODEL_PARALLEL:=1}"
@@ -264,8 +249,6 @@ cleanup_containers() {
     cleanup_npy_index_dir
 }
 trap cleanup_containers TERM EXIT
-RESUBMIT="env \$(cat $TMPDIR/env.log | xargs) sbatch $0; exit 1"
-trap "set -x; cleanup_containers; $RESUBMIT"  1 7 11 13
 
 # do we need to fetch the data from remote disk into local /tmp disk?
 if [[ "${TARFILE_FOR_PREPROC_DATA:-}" ]]; then
