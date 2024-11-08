@@ -20,7 +20,7 @@
 #SBATCH --no-requeue
 #SBATCH --nodes=96
 #SBATCH --job-name=mlperf-nv-gpt3
-#SBATCH --time=2:00:00
+#SBATCH --time=3:00:00
 #SBATCH --output=logs/slurm-%j.out
 # #SBATCH --account=csstaff
 #SBATCH --reservation=NCCL
@@ -40,10 +40,10 @@ export PROFCMD=" "  # disable jobreport
 source config_common.sh
 source config_fp8.sh
 
-export PIPELINE_MODEL_PARALLEL=${PP:=8} #  training.model.pipeline_model_parallel_size
+export PIPELINE_MODEL_PARALLEL=${PP:=6} #  training.model.pipeline_model_parallel_size
 export TENSOR_MODEL_PARALLEL=${TP:=4}   #  training.model.tensor_model_parallel_size
 export MICRO_BATCH_SIZE=${MB:=2}
-export MINIBS=${BS:=128}
+export MINIBS=${BS:=192}
 export VBOOST_VALUE=0
 # export SEQ_PARALLEL=0
 export INTERLEAVED_PIPELINE=4
