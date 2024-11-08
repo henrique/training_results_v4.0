@@ -24,6 +24,7 @@
 #SBATCH --output=logs/slurm-%j.out
 # #SBATCH --account=csstaff
 #SBATCH --reservation=NCCL
+#SBATCH --exclude=nid005674,nid005675,nid007591,nid[005424,006351,006367,006378,005375]
 
 set -eux
 
@@ -55,8 +56,8 @@ export DGXSYSTEM='CSCS'
 export NEXP=1
 export ENDTIME=$(squeue -h -j $SLURM_JOBID -o "%e")
 export WALLTIME=$(((`date -d "$ENDTIME" +%s` - `date +%s`) / 60)) # in minutes
-export SPM=/store/cscs/csstaff/dealmeih/ds/mlperf/data/megatron-lm/spm/c4_en_301_5Mexp2_spm.model
-export PREPROC_DATA=/store/cscs/csstaff/dealmeih/ds/mlperf/data/megatron-lm/preprocessed_c4_spm
+export SPM=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm/spm/c4_en_301_5Mexp2_spm.model
+export PREPROC_DATA=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm/preprocessed_c4_spm
 export DGXNNODES=$SLURM_NNODES
 export MLPERF_CLUSTER_NAME='CSCS'
 export MLPERF_STATUS='research'
@@ -75,7 +76,7 @@ export USE_DATETIME=1
 # Vars with defaults
 # : "${TENSOR_MODEL_PARALLEL:=1}"
 # : "${PIPELINE_MODEL_PARALLEL:=1}"
-: "${LOAD_CHECKPOINTS_PATH:=/store/cscs/csstaff/dealmeih/ds/mlperf/data/megatron-lm}"
+: "${LOAD_CHECKPOINTS_PATH:=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm}"
 : "${MLPERF_RULESET:=4.0.0}"
 : "${MLPERF_SYSTEM_NAME:='unknown'}"
 : "${CHECK_COMPLIANCE:=1}"
