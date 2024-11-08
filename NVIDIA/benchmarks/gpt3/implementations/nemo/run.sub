@@ -14,17 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#SBATCH --exclusive
+#SBATCH --mem=0
+# #SBATCH --mem=460000        # avoid unified memory issue
 #SBATCH --no-requeue
-#SBATCH --nodes=128
+#SBATCH --nodes=96
 #SBATCH --job-name=mlperf-nv-gpt3
 #SBATCH --time=2:00:00
 #SBATCH --output=logs/slurm-%j.out
-#SBATCH --account=csstaff
-#SBATCH --reservation=todi
+# #SBATCH --account=csstaff
+#SBATCH --reservation=NCCL
 
 set -eux
 
+# export ENROOT_LIBRARY_PATH=/capstor/scratch/cscs/fmohamed/enroot-lib
+export ENROOT_LIBRARY_PATH=/capstor/scratch/cscs/fmohamed/enrootlibn
+# export ENROOT_RUNTIME_PATH=/tmp/$USER/enroot/$SLURM_JOBID
+# export REMOUNT_NEMO_PATH=/capstor/scratch/cscs/dealmeih/dev/NeMo
+
 JOBREPORT_OUT="logs/jobrep-$SLURM_JOB_ID"
+# export PROFCMD="$HOME/bin/jobreport -o $JOBREPORT_OUT -- "  # use jobreport when not profiling
+# export PROFCMD="numactl --membind=0-3 "  # disable jobreport
+export PROFCMD=" "  # disable jobreport
 
 source config_common.sh
 source config_fp8.sh
@@ -34,6 +45,7 @@ export TENSOR_MODEL_PARALLEL=${TP:=4}   #  training.model.tensor_model_parallel_
 export MICRO_BATCH_SIZE=${MB:=2}
 export MINIBS=${BS:=128}
 export VBOOST_VALUE=0
+# export SEQ_PARALLEL=0
 export INTERLEAVED_PIPELINE=4
 # export TP_COMM_OVERLAP=True
 
@@ -41,27 +53,29 @@ export INTERLEAVED_PIPELINE=4
 export CONT=nemo
 export DGXSYSTEM='CSCS'
 export NEXP=1
-export WALLTIME=$(squeue -h -j $SLURM_JOBID -o "%L")
-export SPM=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm/spm/c4_en_301_5Mexp2_spm.model
-export PREPROC_DATA=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm/preprocessed_c4_spm
+export ENDTIME=$(squeue -h -j $SLURM_JOBID -o "%e")
+export WALLTIME=$(((`date -d "$ENDTIME" +%s` - `date +%s`) / 60)) # in minutes
+export SPM=/store/cscs/csstaff/dealmeih/ds/mlperf/data/megatron-lm/spm/c4_en_301_5Mexp2_spm.model
+export PREPROC_DATA=/store/cscs/csstaff/dealmeih/ds/mlperf/data/megatron-lm/preprocessed_c4_spm
 export DGXNNODES=$SLURM_NNODES
 export MLPERF_CLUSTER_NAME='CSCS'
 export MLPERF_STATUS='research'
 export REMOUNT_WORKDIR=1
 export MPLCONFIGDIR="$SCRATCH/.cache"
 export HF_HOME="$SCRATCH/huggingface"
+export CUDA_CACHE_PATH="$SCRATCH/.cuda_cache"
 
 export MASTER_PORT=29500
 export DGXNGPU=4
 
-# export DEBUG=1
+export DEBUG=1
 export HYDRA_FULL_ERROR=1
 export USE_DATETIME=1
 
 # Vars with defaults
 # : "${TENSOR_MODEL_PARALLEL:=1}"
 # : "${PIPELINE_MODEL_PARALLEL:=1}"
-: "${LOAD_CHECKPOINTS_PATH:=/capstor/scratch/cscs/dealmeih/ds/mlperf/data/megatron-lm}"
+: "${LOAD_CHECKPOINTS_PATH:=/store/cscs/csstaff/dealmeih/ds/mlperf/data/megatron-lm}"
 : "${MLPERF_RULESET:=4.0.0}"
 : "${MLPERF_SYSTEM_NAME:='unknown'}"
 : "${CHECK_COMPLIANCE:=1}"
@@ -76,15 +90,15 @@ export SHARE_RERUNS=${SHARE_RERUNS:=0}
 : "${LOGDIR:=${PWD}/results}"
 : "${ABSLOGDIR:=${PWD}/results}"
 : "${POWERCMDDIR:=' '}"
-: "${NSYSCMD:=""}"
-: "${NVTX_FLAG:=0}"
+: "${PROFILE:=0}"
+: "${NVTX_FLAG:=${PROFILE}}"
 : "${TIME_TAGS:=0}"
 : "${NCCL_TEST:=0}"
 : "${NCCL_LLM_TEST:=0}"
 : "${NCCL_TEST_SHARP:=}"
 : "${RUN_ONLY_NCCL:=0}"
 : "${SYNTH_DATA:=0}"
-: "${EPOCH_PROF:=0}"
+: "${EPOCH_PROF:=1}"
 : "${WORK_DIR:=/workspace/llm}"
 : "${STORE_CKPTS_IN_LOGDIR:=1}"
 : "${CHECKPOINTS_DIR:=}"
@@ -105,6 +119,9 @@ export SHARE_RERUNS=${SHARE_RERUNS:=0}
 : "${VBOOST_VALUE:=0}"
 
 cat $CONT_FILE
+
+ulimit -c 0
+export LOGDIR=${LOGDIR}
 
 # This is used inside a container to create local directory for storing pipes
 export ATTEMPT_CUDA_GDB_CORE_DUMP=${ATTEMPT_CUDA_GDB_CORE_DUMP}
@@ -135,7 +152,7 @@ export MLPERF_SLURM_FIRSTNODE="$(scontrol show hostnames "${SLURM_JOB_NODELIST-}
 # Other vars
 export MODEL_NAME="large_language_model"
 export MODEL_FRAMEWORK="pytorch"
-LOGBASE="${DATESTAMP}"
+LOGBASE="${DATESTAMP}_${SLURM_JOBID}_${DGXNNODES}"
 SPREFIX="${MODEL_NAME}_${MODEL_FRAMEWORK}_${DGXNNODES}x${DGXNGPU}_${DATESTAMP}"
 
 if [ ${SHARE_RERUNS:-0} -eq 1 ]; then
@@ -246,10 +263,11 @@ cleanup_npy_index_dir() {
     fi
 }
 
-cleanup_containers() {
+on_exit() {
     cleanup_npy_index_dir
+    $HOME/bin/jobreport print $JOBREPORT_OUT
 }
-trap cleanup_containers TERM EXIT
+trap on_exit TERM EXIT
 
 # do we need to fetch the data from remote disk into local /tmp disk?
 if [[ "${TARFILE_FOR_PREPROC_DATA:-}" ]]; then
@@ -259,7 +277,7 @@ if [[ "${TARFILE_FOR_PREPROC_DATA:-}" ]]; then
         exit 1
     fi
     # manage data in tmpdir on every node
-    srun --ntasks="${SLURM_JOB_NUM_NODES}" \
+    srun -ul --ntasks="${SLURM_JOB_NUM_NODES}" \
          "${RUNSUB_DIR}/manage-tmp-data" \
          "${TARFILE_FOR_PREPROC_DATA}" "${PREPROC_DATA}"   \
          "${MD5SUM_FOR_PREPROC_DATA}"
@@ -288,7 +306,7 @@ echo "using MASTER_ADDR \"${MASTER_ADDR}\" of list \"${SLURM_JOB_NODELIST}\""
 echo "LLM NCCL_TEST"
 if [[ ${NCCL_LLM_TEST} -eq 1 ]]; then
     (
-    srun --mpi="${SLURM_MPI_TYPE:-pmi2}" \
+    srun -ul --mpi="${SLURM_MPI_TYPE:-pmi2}" \
          --ntasks="$(( SLURM_JOB_NUM_NODES * DGXNGPU ))" \
          --ntasks-per-node="${DGXNGPU}" \
          --environment="${CONT_FILE}" \
@@ -303,12 +321,12 @@ fi
 
 echo "NCCL_TEST = ${NCCL_TEST}"
 if [[ ${NCCL_TEST} -eq 1 ]]; then
-    (srun --mpi="${SLURM_MPI_TYPE:-pmi2}" --ntasks="$(( SLURM_JOB_NUM_NODES * DGXNGPU ))" --ntasks-per-node="${DGXNGPU}" \
-          --environment="${CONT_FILE}" --container-mounts="${_cont_mounts}" all_reduce_perf_mpi -b 100M -e 100M -d half -G 1 -f 2 ) |& tee "${LOGDIR}/${SPREFIX}_nccl.log"
+    # (srun -ul --mpi="${SLURM_MPI_TYPE:-pmi2}" --ntasks="$(( SLURM_JOB_NUM_NODES * DGXNGPU ))" --ntasks-per-node="${DGXNGPU}" \
+    #       --environment="${CONT_FILE}" --container-mounts="${_cont_mounts}" all_reduce_perf_mpi -b 100M -e 100M -d half -G 1 -f 2 ) |& tee "${LOGDIR}/${SPREFIX}_nccl.log"
     # run with args that are convincing/useful to other teams
     # NCCL_SPLIT_MASK=0x7 
-    srun --mpi="${SLURM_MPI_TYPE:-pmi2}" --ntasks-per-node="${DGXNGPU}" \
-         --environment="${CONT_FILE}" --container-mounts="${_cont_mounts}" all_reduce_perf_mpi -b 128M -e 4G -f 2
+    srun -ul --mpi="${SLURM_MPI_TYPE:-pmi2}" --ntasks-per-node="${DGXNGPU}" \
+         --environment="${CONT_FILE}" --container-mounts="${_cont_mounts}" all_reduce_perf_mpi -b 128M -e 4G -f 2 -w 8 -n 24
 fi
 if [ ${RUN_ONLY_NCCL} -gt 0 ]; then
     exit 0
@@ -356,7 +374,7 @@ fi
 
 #Set the value for nvidia-smi boost-slider --vboost
 if [ ${VBOOST_VALUE} -gt 0 ]; then
-    srun --ntasks=${SLURM_JOB_NUM_NODES} bash -c "sudo nvidia-smi boost-slider --vboost ${VBOOST_VALUE}"
+    srun -ul --ntasks=${SLURM_JOB_NUM_NODES} bash -c "sudo nvidia-smi boost-slider --vboost ${VBOOST_VALUE}"
 fi
 
 if [ "${HANG_MONITOR_TIMEOUT-0}" -gt 0 ]; then
@@ -394,7 +412,8 @@ else
   hang_monitor_pid=
 fi
 
-srun -ul hostname
+# Log hostnames for all ranks
+srun -l --ntasks-per-node="${DGXNGPU}" hostname
 
 # Run experiments
 for _experiment_index in $(seq -w 1 "${NEXP}"); do
@@ -409,14 +428,16 @@ for _experiment_index in $(seq -w 1 "${NEXP}"); do
 
         # Clear caches
         if [ "${CLEAR_CACHES}" -eq 1 ]; then
-            srun --ntasks="${SLURM_JOB_NUM_NODES}" bash -c "echo -n 'Clearing cache on ' && hostname && sync && ${DROPCACHE_CMD}"
-            srun --ntasks="${SLURM_JOB_NUM_NODES}" --environment="${CONT_FILE}" python -c "
+            srun -l --ntasks="${SLURM_JOB_NUM_NODES}" bash -c "echo -n 'Clearing cache on ' && hostname && sync && ${DROPCACHE_CMD}"
+            srun -l --ntasks="${SLURM_JOB_NUM_NODES}" --environment="${CONT_FILE}" python -c "
 from mlperf_logger import mllogger
 mllogger.event(key=mllogger.constants.CACHE_CLEAR, value=True)"
         fi
 
+        head /sys/cray/pm_counters/*
+
         # Run experiment
-        srun -l --mpi="${SLURM_MPI_TYPE:-pmi2}"              \
+        srun -l --wait=240 --mpi="${SLURM_MPI_TYPE:-pmi2}"              \
          --no-container-mount-home                       \
          --ntasks="$(( SLURM_JOB_NUM_NODES * DGXNGPU ))" \
          --ntasks-per-node="${DGXNGPU}"                  \
@@ -425,7 +446,9 @@ mllogger.event(key=mllogger.constants.CACHE_CLEAR, value=True)"
          --container-workdir=${WORK_DIR}                 \
          --container-writable                            \
          ${SRUN_EXTRA_ARGS}                              \
-         $HOME/bin/jobreport -o $JOBREPORT_OUT -- "slurm2pytorch" ./run_and_time.sh
+         "slurm2pytorch" ./run_and_time.sh
+
+        head /sys/cray/pm_counters/*
 
     ) |& tee "${LOG_FILE_BASE}_${_experiment_index}.log"
     # compliance checker
@@ -460,8 +483,6 @@ mllogger.event(key=mllogger.constants.CACHE_CLEAR, value=True)"
     #   JET_CREATE="${JET_CREATE:-} --data workload.spec.nodes=${DGXNNODES} --data workload.spec.name=${MODEL_NAME} --data workload.spec.framework=${MODEL_FRAMEWORK} --data workload.spec.platform=${DGXSYSTEM} --data workload.key=${MODEL_NAME}_${MODEL_FRAMEWORK}_${DGXSYSTEM} --mllogger "
     #   srun -N1 -n1 --environment="${CONT_FILE}" --container-mounts="${_cont_mounts}" bash -c "${JET_CREATE} /results/${LOGBASE}_${_experiment_index}.log --asset /results/slurm-${SLURM_JOB_ID}.out --data source_image.name=${CONT} --data slurm.job=${SLURM_JOB_ID} && ${JET_UPLOAD}"
     # fi
-
-    $HOME/bin/jobreport print $JOBREPORT_OUT
 done
 
 if [ -n ${hang_monitor_pid} ] && ps -p $hang_monitor_pid > /dev/null; then

@@ -19,8 +19,14 @@ set -e
 
 [ "${DEBUG}" = "1" ] && set -x
 
-hostname
-ulimit -c 0  # Disable core file creation
+#if [ ${SLURM_PROCID} -eq 0 ]; then
+#  export NCCL_DEBUG='INFO'
+#else
+  export NCCL_DEBUG='WARN'
+#fi
+
+ulimit -c 0
+# export NCCL_SOCKET_IFNAME=hsn${SLURM_LOCALID}
 
 # Vars without defaults
 : "${SEED:?SEED not set}"
@@ -139,7 +145,11 @@ if [ "${PRINT_CONFIG_ONLY:-False}" = True ]; then
 fi
 
 if [ ${NVTX_FLAG} -gt 0 ]; then
- NSYSCMD=" nsys profile --sample=none --cpuctxsw=none  --trace=cuda,nvtx --cuda-graph-trace=node --force-overwrite true --capture-range=cudaProfilerApi --capture-range-end=stop --output /results/llm_${DGXNNODES}_r${SLURM_PROCID}.nsys-rep "
+  # PROFCMD=" nsys profile --stats=true -f true -t cuda,nvtx --output /results/$NEMO_RESULTS_SUBDIR/r${SLURM_PROCID}.nsys-rep "
+  PROFCMD="\
+  nsys profile --sample=none --cpuctxsw=none --stats=true -f true -t cuda,nvtx \
+  --cuda-graph-trace=node --capture-range=cudaProfilerApi --capture-range-end=stop \
+  --output /results/$NEMO_RESULTS_SUBDIR/nemo_${DGXNNODES}_r${SLURM_PROCID}.nsys-rep "
 fi
 
 # run benchmark
@@ -159,12 +169,12 @@ fi
 
 # if [[ -n "${SLURM_LOCALID-}" ]] && [[ "${SLURM_NTASKS}" -gt "${SLURM_JOB_NUM_NODES}" ]]; then
 #     # Mode 1: Slurm launched a task for each GPU and set some envvars
-#     CMD=( 'bindpcie' ${CPU_EXCLUSIVE} ${IB_BIND} '--' ${NSYSCMD} 'python' '-u')
+#     CMD=( 'bindpcie' ${CPU_EXCLUSIVE} ${IB_BIND} '--' ${PROFCMD} 'python' '-u')
 # else
 #     # interactive run on single node, no need to bind
-#     CMD=( ${NSYSCMD} 'torchrun' '--nproc_per_node=8' )
+#     CMD=( ${PROFCMD} 'torchrun' '--nproc_per_node=8' )
 # fi
-CMD=( ${NSYSCMD} 'python' '-u' )
+CMD=( ${PROFCMD} 'python' '-u' )
 
 if [ "$LOGGER" = "apiLog.sh" ];
 then
